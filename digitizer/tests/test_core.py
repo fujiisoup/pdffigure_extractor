@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 import os
+import fitz
 from .. import core
 
 
@@ -11,7 +12,10 @@ def test_to_svg():
         f.write(core._to_svg(filename, page=0))
     with open('test_svg.txt', 'w') as f:
         f.write(core._to_svg(filename, page=0))
-
+    
+    pix_doc = fitz.open("test.svg")
+    pix = pix_doc.getPagePixmap(0)
+    pix.writePNG("test.png")
 
 def test_distance():
     paths = core.Paths(core._to_svg(filename, page=0))

@@ -4,5 +4,7 @@ Recent scientific papers contains vector graphic, i.e., the digital data.
 Why don't we use this info?
 # Requirement
 It requires
++ numpy
++ matplotlib
 + pymupdf
-+ 
++ pyqt5

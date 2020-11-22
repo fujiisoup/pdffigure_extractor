@@ -1,12 +1,18 @@
 from xml.dom import minidom
 import numpy as np
 import fitz
-from . import geometry
+
+try:
+    from . import geometry
+except ImportError:
+    import geometry
 
 
 def _to_svg(pdf, page, figure_num=0):
     with fitz.open(pdf) as doc:
-        return list(doc.pages())[page].getSVGimage()
+        return list(doc.pages())[page].getSVGimage(
+            text_as_path=True
+        )
 
 
 def _compute_abs_path(path):
