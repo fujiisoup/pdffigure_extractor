@@ -7,9 +7,11 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QGridLayout,
     QGroupBox, QPushButton, QFileDialog, QSizePolicy,
     QRadioButton, QInputDialog, QLabel, QDesktopWidget,
-    QGraphicsView, QGraphicsScene)
-from PyQt5.QtGui import QPainter, QImage
+    QGraphicsView, QGraphicsScene, QGraphicsItem, QGraphicsRectItem)
+from PyQt5.QtGui import QBrush, QColor, QImage, QPainter, QPixmap, QPen
 from PyQt5.QtCore import Qt
+
+from PyQt5.QtWebEngineWidgets import QWebEngineView
 
 from PyQt5.QtSvg import QGraphicsSvgItem
 #
@@ -28,33 +30,8 @@ except ImportError:
     import core
 
 
-class SvgView(QGraphicsView):
-    def __init__(self, parent=None):
-        super(SvgView, self).__init__(parent)
-        self.svgItem = None
-        self.backgroundItem = None
-        self.outlineItem = None
-        self.image = QImage()
-
-        self.setScene(QGraphicsScene(self))
-        self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
-        self.setDragMode(QGraphicsView.ScrollHandDrag)
-        self.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
-
-    def drawBackground(self, p, rect):
-        p.save()
-        p.resetTransform()
-        p.drawTiledPixmap(self.viewport().rect(),
-                self.backgroundBrush().texture())
-        p.restore()
-
-    def openFile(self, svg_file):
-        s = self.scene()    
-        s.clear()
-        self.resetTransform()
-
-        self.svgItem = QGraphicsSvgItem(svg_file)
-        s.addItem(self.svgItem)
+class SvgView(QWebEngineView):
+    pass
 
 
 # FigureCanvas
@@ -144,7 +121,7 @@ class MainWidget(QWidget):
         self.Xlog,
         self.Ylinear,
         self.Ylog,
-        self.GraphicView,
+        self.WebView,
         self.HintLabel,
         self.XminLabel,
         self.YminLabel,
@@ -262,14 +239,14 @@ class MainWidget(QWidget):
         # Second Column (Figure)
         VBoxDx1 = QGroupBox()
         Layout2 = QGridLayout()
-        GraphicView = SvgView()
+        WebView = SvgView()
         
         #
         # FigCanvas = MplCanvas(self, width=5, height=4, dpi=100)
         # toolbar = NavigationToolbar(FigCanvas, VBoxDx1)
         #
         # Layout2.addWidget(FigCanvas,0,0)
-        Layout2.addWidget(GraphicView,1,0)
+        Layout2.addWidget(WebView,1,0)
         VBoxDx1.setLayout(Layout2)
         # ----------------------------------
         # ----------------------------------
@@ -298,13 +275,13 @@ class MainWidget(QWidget):
         self.setLayout(windowLayout)
         # ----------------------------------
         # ----------------------------------
-        return (Xlinear, Xlolg, Ylinear, Ylog, GraphicView, HintLabel,
+        return (Xlinear, Xlolg, Ylinear, Ylog, WebView, HintLabel,
                 XminLabel, YminLabel, XmaxLabel, YmaxLabel)
 
     def loadImage(self):
         filename, _ = QFileDialog.getOpenFileName()
-        
-        self.GraphicView.openFile(filename)
+        txt = core._to_svg(filename, 0)
+        self.WebView.setHtml(txt)
 
     def pickXmin(self):
 

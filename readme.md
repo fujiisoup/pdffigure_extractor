@@ -5,6 +5,6 @@ Why don't we use this info?
 # Requirement
 It requires
 + numpy
-+ matplotlib
 + pymupdf
 + pyqt5
++ pyqtwebengine
