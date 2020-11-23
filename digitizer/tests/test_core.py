@@ -22,8 +22,15 @@ def test_distance():
     for path in paths.paths[3].abs_path:
         assert path.size == 2
     for path in paths.paths:
-        dist = path.distance((0, 0))
+        dist = path.distance2((0, 0))
         if np.isfinite(dist):
             assert dist > 0
         else:
             print(path.abs_path)
+
+def test_selected():
+    paths = core.Paths(core._to_svg(filename, page=0))
+    path = paths.find_nearest([200, 130])
+    print(path)
+    with open('test_append.svg', 'w') as f:
+        f.write(paths.appended_svd(path))

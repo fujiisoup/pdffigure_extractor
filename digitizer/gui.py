@@ -41,7 +41,11 @@ class SvgView(QWebEngineView):
         self.setHtml(self._original_paths.svg)
 
     def setHtml(self, txt):
+        self.scroll(0, 0)
+        page = self.page()
+        pos = page.scrollPosition()
         super().setHtml(txt)
+        page.runJavaScript('window.scrollTo({}, {});'.format(pos.x(), pos.y()))
 
     def svd_position(self, pos):
         """
@@ -52,14 +56,20 @@ class SvgView(QWebEngineView):
         page = self.page().scrollPosition()
         scroll = np.array([page.x(), page.y()])
         zoomscale = self.zoomFactor()
-        return (scroll + pos) / zoomscale
+        view_x = np.array([self.pos().x(), self.pos().y()])
+        pos = (scroll + pos) / zoomscale
+        # convert it to inch
+        dpi = ([self.physicalDpiX(), self.physicalDpiY()])
+        print(view_x, pos / dpi)
+        return pos / dpi
 
     def onClick(self, event):
         pos = event.pos()
         pos = self.svd_position(np.array([pos.x(), pos.y()]))
         if self._original_paths is not None:
             path = self._original_paths.find_nearest(pos)
-            print(path)
+            new_svd = self._original_paths.appended_svd(path)
+            self.setHtml(new_svd)
 
 
 # FigureCanvas

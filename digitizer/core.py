@@ -1,3 +1,4 @@
+import copy
 from xml.dom import minidom
 import numpy as np
 import fitz
@@ -17,6 +18,7 @@ def _to_svg(pdf, page, figure_num=0):
 
 def _compute_abs_path(path):
     txts = path.getAttribute('d').strip().split(' ')
+
     mode = 'M'
     paths = []
     coord = [0, 0]
@@ -52,7 +54,15 @@ def _compute_abs_path(path):
                     coord[1] += float(txt)
                 paths.append(np.array(coord))
                 idx = 0
-
+    # consider transform
+    transform = path.getAttribute('transform')
+    if transform is not None:
+        transform = transform[transform.find('matrix(') + 7:-1].split(',')
+        a, b, c, d, e, f = [float(t) for t in transform]
+        scale = np.array([[a, b], [c, d]])
+        offset = np.array([e, f])
+        paths = [scale @ path + offset for path in paths]
+    
     return paths
 
 
@@ -92,20 +102,42 @@ class Paths:
         doc = minidom.parseString(svg_txt)
         # common attribute: style, d, id
         self.paths = [Path(path) for path in doc.getElementsByTagName('path')]
+        
+        width = doc.getElementsByTagName('svg')[0].getAttribute('width')
+        self.unit = width[-4:]        
+        print(self.unit)
+
+    def _to_inch(self, val):
+        if self.unit[-2:] == 'pt':
+            return val / 72
+        else:
+            raise NotImplementedError
+
+    def _from_inch(self, val):
+        if self.unit[-2:] == 'pt':
+            return val * 72
+        else:
+            raise NotImplementedError
 
     def find_nearest(self, point):
         """
-        Find the nearest path with given points = (x, y)
+        Find the nearest path with given points = (x, y) with unit inch
         """
-        point = np.array(point)
+        point = self._from_inch(np.array(point))
         distances = [path.distance2(point) for path in self.paths]
         i = np.nanargmin(distances)
         return self.paths[i]
 
     def appended_svd(self, path):
         svg0 = self.svg[:self.svg.find('</svg>')]
-        pathstring = path.toxml()
         
+        color = '#FF0000'
+        path = copy.copy(path.path)
+        path.setAttribute('stroke', color)
+        path.setAttribute('stroke-width', '1')
+        path.setAttribute('fill', 'none')
+
+        return svg0 + path.toxml() + '\n</svg>'
 
     def group(self, path, mode='style'):
         """
