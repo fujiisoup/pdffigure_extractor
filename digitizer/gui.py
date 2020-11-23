@@ -1,6 +1,7 @@
 """
 I learned how to use Qt from https://github.com/giaccone/PyDigitizer
 """
+import time
 import numpy as np
 # modules
 from PyQt5.QtWidgets import (
@@ -35,6 +36,13 @@ class SvgView(QWebEngineView):
         super().__init__()
         self._original_paths = None
         self._selected_paths = []
+        self._previous_pos = (0, 0)
+        self.loadFinished.connect(self._scroll_to_previous)
+
+    def _scroll_to_previous(self):
+        page = self.page()
+        page.runJavaScript('window.scroll({}, {});'.format(
+            *self._previous_pos))
 
     def loadSvg(self, txt):
         self._original_paths = core.Paths(txt)
@@ -42,10 +50,9 @@ class SvgView(QWebEngineView):
 
     def setHtml(self, txt):
         self.scroll(0, 0)
-        page = self.page()
-        pos = page.scrollPosition()
+        pos = self.page().scrollPosition()
+        self._previous_pos = pos.x(), pos.y()
         super().setHtml(txt)
-        page.runJavaScript('window.scrollTo({}, {});'.format(pos.x(), pos.y()))
 
     def svd_position(self, pos):
         """
@@ -57,7 +64,7 @@ class SvgView(QWebEngineView):
         scroll = np.array([page.x(), page.y()])
         zoomscale = self.zoomFactor()
         view_x = np.array([self.pos().x(), self.pos().y()])
-        pos = (scroll + pos) / zoomscale
+        pos = (scroll + pos - view_x) / zoomscale
         # convert it to inch
         dpi = ([self.physicalDpiX(), self.physicalDpiY()])
         print(view_x, pos / dpi)
