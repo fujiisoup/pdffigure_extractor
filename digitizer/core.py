@@ -116,8 +116,9 @@ class Path:
 
     @property
     def center(self):
+        abs_path = np.stack(self.abs_path, axis=0)
         return 0.5 * (
-            np.nanmax(self.abs_path, axis=0) + np.nanmin(self.abs_path)
+            np.nanmax(abs_path, axis=0) + np.nanmin(abs_path, axis=0)
         )
 
 
@@ -133,8 +134,7 @@ class Paths:
         
         width = doc.getElementsByTagName('svg')[0].getAttribute('width')
         self.unit = width[-4:]        
-        print(self.unit)
-
+        
     def _to_inch(self, val):
         if self.unit[-2:] == 'pt':
             return val / 72

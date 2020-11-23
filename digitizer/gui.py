@@ -94,7 +94,7 @@ class SvgView(QWebEngineView):
         if use_group:
             raise NotImplementedError
         else:
-            return np.stack(self._selected_path.abs_path, axis=-1)
+            return np.stack(self._selected_path.abs_path, axis=0)
 
 
 # Main Windows
@@ -416,12 +416,12 @@ class MainWidget(QWidget):
 
     def convert_x(self, x):
         return self._convert(
-            x, self.X0pic, self.X1pic, self.X0pic, self.X1pic, 
+            x, self.X0pic, self.X1pic, self.X0real, self.X1real, 
             self.XScaleType == 'log')
 
     def convert_y(self, y):
         return self._convert(
-            y, self.Y0pic, self.Y1pic, self.Y0pic, self.Y1pic, 
+            y, self.Y0pic, self.Y1pic, self.Y0real, self.Y1real, 
             self.YScaleType == 'log')
 
     def _display_value(self):
@@ -430,7 +430,7 @@ class MainWidget(QWidget):
         xy = self.WebView.selected()
         if xy is None:
             return
-        self.Xsampled, self.Ysampled = xy[0], xy[1]
+        self.Xsampled, self.Ysampled = xy[:, 0], xy[:, 1]
 
         if all(v is not None for v in [
             self.X0pic, self.X1pic, self.Y0pic, self.Y1pic,
