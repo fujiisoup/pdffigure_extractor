@@ -1,3 +1,7 @@
 notebooks
 .pytest_cache
 __pycache__
+
+# temporaly files
+digitizer/*.pdf
+digitizer/*.svg

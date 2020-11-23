@@ -8,3 +8,8 @@ It requires
 + pymupdf
 + pyqt5
 + pyqtwebengine
+
+# Known problems
++ The selection position is disaligned from the actual figure
++ The scroll position is reset after every selection
++ Some markers are not recognized as a set of markers but a set of lines
