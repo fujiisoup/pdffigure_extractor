@@ -1,7 +1,7 @@
 """
 I learned how to use Qt from https://github.com/giaccone/PyDigitizer
 """
-from tempfile import NamedTemporaryFile
+import numpy as np
 # modules
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QGridLayout,
@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (
     QRadioButton, QInputDialog, QLabel, QDesktopWidget,
     QGraphicsView, QGraphicsScene, QGraphicsItem, QGraphicsRectItem)
 from PyQt5.QtGui import QBrush, QColor, QImage, QPainter, QPixmap, QPen
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QObject, QEvent
 
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 
@@ -31,7 +31,35 @@ except ImportError:
 
 
 class SvgView(QWebEngineView):
-    pass
+    def __init__(self):
+        super().__init__()
+        self._original_paths = None
+        self._selected_paths = []
+
+    def loadSvg(self, txt):
+        self._original_paths = core.Paths(txt)
+        self.setHtml(self._original_paths.svg)
+
+    def setHtml(self, txt):
+        super().setHtml(txt)
+
+    def svd_position(self, pos):
+        """
+        Return the svd-oriented position from the current position
+
+        pos: np.array
+        """
+        page = self.page().scrollPosition()
+        scroll = np.array([page.x(), page.y()])
+        zoomscale = self.zoomFactor()
+        return (scroll + pos) / zoomscale
+
+    def onClick(self, event):
+        pos = event.pos()
+        pos = self.svd_position(np.array([pos.x(), pos.y()]))
+        if self._original_paths is not None:
+            path = self._original_paths.find_nearest(pos)
+            print(path)
 
 
 # FigureCanvas
@@ -240,12 +268,9 @@ class MainWidget(QWidget):
         VBoxDx1 = QGroupBox()
         Layout2 = QGridLayout()
         WebView = SvgView()
+        self._glwidget = []
+        WebView.installEventFilter(self)
         
-        #
-        # FigCanvas = MplCanvas(self, width=5, height=4, dpi=100)
-        # toolbar = NavigationToolbar(FigCanvas, VBoxDx1)
-        #
-        # Layout2.addWidget(FigCanvas,0,0)
         Layout2.addWidget(WebView,1,0)
         VBoxDx1.setLayout(Layout2)
         # ----------------------------------
@@ -281,15 +306,27 @@ class MainWidget(QWidget):
     def loadImage(self):
         filename, _ = QFileDialog.getOpenFileName()
         txt = core._to_svg(filename, 0)
-        self.WebView.setHtml(txt)
+        self.WebView.loadSvg(txt)
+
+    def eventFilter(self, source, event):
+        if (event.type() == QEvent.ChildAdded and
+            source is self.WebView and
+            event.child().isWidgetType()):
+            if event.child() not in self._glwidget:
+                self._glwidget.append(event.child())
+                self._glwidget[-1].installEventFilter(self)
+        elif (event.type() == QEvent.MouseButtonPress and
+              source in self._glwidget):
+            self.WebView.onClick(event)
+        return super().eventFilter(source, event)
 
     def pickXmin(self):
 
-        self.HintLabel.setText('Click at a point having minimum x value.')
-        self.FigCanvas.setFocusPolicy( Qt.ClickFocus )
-        self.FigCanvas.setFocus()
-        pt = self.FigCanvas.figure.ginput(n=1)
-        self.Xpic_min = pt[0][0]
+        self.HintLabel.setText('Click at a tick on x axis.')
+        self.WebView.setFocusPolicy( Qt.ClickFocus )
+        self.WebView.setFocus()
+        # pt = self.WebView.figure.ginput(n=1)
+        # self.Xpic_min = pt[0][0]
 
         self.HintLabel.setText('Provide the minimum x value.')
         self.Xreal_min, okPressed = QInputDialog.getDouble(self, "Set X_min value", "Value:", value=0, decimals=4)

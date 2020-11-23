@@ -68,7 +68,7 @@ class Path:
             self._abs_path = _compute_abs_path(self.path)
         return self._abs_path
 
-    def distance(self, point):
+    def distance2(self, point):
         if len(self.abs_path) == 0:
             return np.nan
         elif len(self.abs_path) == 1:
@@ -88,6 +88,7 @@ class Paths:
     A collection of paths
     """
     def __init__(self, svg_txt):
+        self.svg = svg_txt
         doc = minidom.parseString(svg_txt)
         # common attribute: style, d, id
         self.paths = [Path(path) for path in doc.getElementsByTagName('path')]
@@ -98,8 +99,13 @@ class Paths:
         """
         point = np.array(point)
         distances = [path.distance2(point) for path in self.paths]
-        i = np.argmin(distances)
+        i = np.nanargmin(distances)
         return self.paths[i]
+
+    def appended_svd(self, path):
+        svg0 = self.svg[:self.svg.find('</svg>')]
+        pathstring = path.toxml()
+        
 
     def group(self, path, mode='style'):
         """
