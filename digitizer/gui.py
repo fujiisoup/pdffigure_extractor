@@ -6,7 +6,7 @@ import numpy as np
 # modules
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QGridLayout, QSpinBox,
-    QGroupBox, QPushButton, QFileDialog, QSizePolicy,
+    QGroupBox, QPushButton, QFileDialog, QSizePolicy, QCheckBox,
     QRadioButton, QInputDialog, QLabel, QDesktopWidget, QScrollArea,
     QGraphicsView, QGraphicsScene, QGraphicsItem, QGraphicsRectItem, QVBoxLayout)
 from PyQt5.QtGui import QBrush, QColor, QImage, QPainter, QPixmap, QPen
@@ -36,6 +36,7 @@ class SvgView(QWebEngineView):
         super().__init__()
         self._original_paths = None
         self._selected_path = None
+        self._selected_group = None
         self._selected_point = None
         self._previous_pos = (0, 0)
         self.loadFinished.connect(self._scroll_to_previous)
@@ -89,16 +90,44 @@ class SvgView(QWebEngineView):
             self._selected_point = self._original_paths.find_nearest_point(
                 self._selected_path, current_position
             )
-
+            self.draw()
+    
+    def draw(self, group=False):
+        if not self.is_selected():
+            return
+        if group:
+            self._selected_group = self._original_paths.group(self._selected_path)
+            new_svd = self._original_paths.appended_svd(self._selected_group)
+        else:
             new_svd = self._original_paths.appended_svd(
                 self._selected_path, self._selected_point)
-            self.setHtml(new_svd)
+        self.setHtml(new_svd)
+
+    def is_selected(self):
+        if self._selected_path is None or len(self._selected_path.abs_path) == 0:
+            return False
+        return True
+
+    def select_group(self):
+        if self.is_selected():
+            self._selected_group = self._original_paths.group(self._selected_path)        
+        self.draw(group=True)
+
+    def unselect_group(self):
+        self._selected_group = None
+        self.draw()
 
     def selected(self, use_group=False):
-        if self._selected_path is None or len(self._selected_path.abs_path) == 0:
+        if not self.is_selected():
             return None
         if use_group:
-            raise NotImplementedError
+            if self.selected_group is None:
+                self._select_group()
+                self.draw()
+            # draw highlighted svd
+            new_svd = self._original_paths.appended_svd(paths)
+            self.setHtml(new_svd)
+            return np.stack([p.center for p in paths], axis=0)
         else:
             return np.stack(self._selected_path.abs_path, axis=0)
 
@@ -229,12 +258,12 @@ class MainWidget(QWidget):
         LayoutSx3 = QGridLayout()
         Xlinear = QRadioButton('linear')
         Xlinear.setChecked(True)
-        Xlolg = QRadioButton('log')
+        Xlog = QRadioButton('log')
         LayoutSx3.addWidget(Xlinear,0,0)
-        LayoutSx3.addWidget(Xlolg,0,1)
+        LayoutSx3.addWidget(Xlog,0,1)
         #
         Xlinear.clicked.connect(self.setXScaleType)
-        Xlolg.clicked.connect(self.setXScaleType)
+        Xlog.clicked.connect(self.setXScaleType)
         #
         VBoxSx3.setLayout(LayoutSx3)
         # ----------------------------------
@@ -319,7 +348,7 @@ class MainWidget(QWidget):
         # ----------------------------------
         # ----------------------------------
         return (LoadPageButton, 
-                Xlinear, Xlolg, Ylinear, Ylog, WebView, HintLabel,
+                Xlinear, Xlog, Ylinear, Ylog, WebView, HintLabel,
                 X0Label, Y0Label, X1Label, Y1Label)
 
     def loadImage(self):
@@ -459,23 +488,7 @@ class MainWidget(QWidget):
             )            
 
     def findGroup(self):
-
-        self.HintLabel.setText('Pick points: please note that if you zoom, '
-                               'the first click (for zooming) is registered. '
-                               'Remove it with backspace.')
-
-        self.FigCanvas.setFocusPolicy( Qt.ClickFocus )
-        self.FigCanvas.setFocus()
-        pt = self.FigCanvas.figure.ginput(n=-1, timeout=-1)
-
-        self.Xsampled = []
-        self.Ysampled = []
-
-        for ptx, pty in pt:
-            self.Xsampled.append(ptx)
-            self.Ysampled.append(pty)
-
-        self.HintLabel.setText('')
+        self.WebView.select_group()
 
     def saveToFile(self):
         for x, label in [

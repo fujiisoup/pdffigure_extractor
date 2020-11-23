@@ -145,8 +145,10 @@ class Paths:
         self.svg = svg_txt
         doc = minidom.parseString(svg_txt)
         # common attribute: style, d, id
-        self.paths = [Path(path) for path in doc.getElementsByTagName('path')]
-        
+        self.paths = [
+            Path(path) for path in doc.getElementsByTagName('path')
+            if len(path.attributes.keys()) > 2]
+        # only consider paths having other than transform and d
         width = doc.getElementsByTagName('svg')[0].getAttribute('width')
         self.unit = width[-4:]        
         
@@ -173,6 +175,7 @@ class Paths:
         if len(distances) == 0:
             return None
         i = np.nanargmin(distances)
+        
         return self.paths[i]
 
     def find_inside(self, point0, point1):
@@ -190,40 +193,59 @@ class Paths:
         point = self._from_inch(np.array(point))
         return path.closest_point(point)
 
-    def appended_svd(self, given_path, point):
-        svg0 = self.svg[:self.svg.find('</svg>')]
+    def appended_svd(self, given_path, point=None, svg0=None):
+        if svg0 is None:
+            svg0 = self.svg[:self.svg.find('</svg>')]
         txt = svg0
-        # keep oritinal attributes
-        attrs = {k: v for k, v in given_path.path.attributes.items()}
-
         color = '#FF0000'
         # copy
-        path = copy.copy(given_path.path)
-        path.setAttribute('stroke', color)
-        path.setAttribute('stroke-width', '3')
-        path.setAttribute('fill', 'none')
+        if not isinstance(given_path, list):
+            given_path = [given_path]
+        # keep oritinal attributes
+        attrs = {k: v for k, v in given_path[0].path.attributes.items()}
 
-        txt = svg0 + path.toxml() + '\n'
-        # draw the point
-        dp = 0.1
-        path2 = copy.copy(given_path.path)
-        path2.setAttribute('d', 
-        'M {} {} v {} h {} v -{} z'.format(
-            *(point - dp), dp, dp, dp))
-        path2.setAttribute('stroke-width', '3')
-        path2.setAttribute('stroke-linejoin', "round")
-        path2.setAttribute(
-            'transform',
-            "matrix(1,0,0,1,0,0)")
+        path = copy.copy(given_path[0].path)
+        for p in given_path:
+            path.setAttribute('stroke', color)
+            path.setAttribute('stroke-width', '3')
+            path.setAttribute('fill', 'none')
+            txt = svg0 + path.toxml() + '\n'
 
-        txt = txt + path2.toxml() + '\n</svg>'
+        if point is not None:
+            # draw the point
+            dp = 0.1
+            path = copy.copy(given_path[0].path)
+            path.setAttribute('d', 
+            'M {} {} v {} h {} v -{} z'.format(
+                *(point - dp), dp, dp, dp))
+            path.setAttribute('stroke-width', '3')
+            path.setAttribute('stroke-linejoin', "round")
+            path.setAttribute(
+                'transform',
+                "matrix(1,0,0,1,0,0)")
+
+            txt = txt + path.toxml()
+        txt = txt + '\n</svg>'
+        
         # make sure the original path does not change
+        keys = list(given_path[0].path.attributes.keys())
+        for k in keys:
+            given_path[0].path.removeAttribute(k)
+
         for k, v in attrs.items():
-            given_path.path.setAttribute(k, v)
+            given_path[0].path.setAttribute(k, v)
         return txt
 
-    def group(self, path, mode='style'):
+    def group(self, path):
         """
         returns a list of paths sharing the same style
         """
-        pass
+        attrs = {k: v for k, v in path.path.attributes.items()}
+        
+        attrs = {k: v for k, v in path.path.attributes.items()
+                 if k not in ['d', 'transform']}
+        paths = []
+        for path in self.paths:
+            if all(attrs[k] == path.path.getAttribute(k) for k in attrs.keys()):
+                paths.append(path)
+        return paths

@@ -39,6 +39,13 @@ def test_distance():
 def test_selected():
     paths = core.Paths(core._to_svg(filename, page=0))
     path = paths.find_nearest([200, 130])
-    print(path)
     with open('test_append.svg', 'w') as f:
         f.write(paths.appended_svd(path))
+
+def test_group():
+    paths = core.Paths(core._to_svg(filename, page=0))
+    path = paths.find_nearest([200, 130])
+    paths.group(path)
+    with open('test_append2.svg', 'w') as f:
+        f.write(paths.appended_svd(path))
+
