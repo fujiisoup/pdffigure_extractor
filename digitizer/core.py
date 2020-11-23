@@ -22,10 +22,6 @@ def _to_svg(pdf, page, figure_num=0):
 
 def _compute_abs_path(path):
     d = path.getAttribute('d')
-    if 'C' in d:
-        # curve is not implemented
-        return np.array([[np.nan, np.nan]])
-
     txts = d.strip().split(' ')
 
     mode = 'M'
@@ -36,8 +32,8 @@ def _compute_abs_path(path):
         if len(txt) == 1:
             mode = txt
         else:
-            if mode in 'MLml':
-                if mode in 'ML':
+            if mode in 'MLCmlc':
+                if mode in 'MLC':
                     coord[idx] = float(txt)
                 else:
                     coord[idx] += float(txt)
@@ -202,14 +198,19 @@ class Paths:
         if not isinstance(given_path, list):
             given_path = [given_path]
         # keep oritinal attributes
-        attrs = {k: v for k, v in given_path[0].path.attributes.items()}
+        attrs = []
+        for p in given_path:
+            attrs.append(
+                {k: v for k, v in p.path.attributes.items()}
+            )
 
         path = copy.copy(given_path[0].path)
         for p in given_path:
+            path = copy.copy(p.path)
             path.setAttribute('stroke', color)
             path.setAttribute('stroke-width', '3')
             path.setAttribute('fill', 'none')
-            txt = svg0 + path.toxml() + '\n'
+            txt = txt + path.toxml() + '\n'
 
         if point is not None:
             # draw the point
@@ -228,20 +229,19 @@ class Paths:
         txt = txt + '\n</svg>'
         
         # make sure the original path does not change
-        keys = list(given_path[0].path.attributes.keys())
-        for k in keys:
-            given_path[0].path.removeAttribute(k)
+        for p, a in zip(given_path, attrs):
+            keys = list(p.path.attributes.keys())
+            for k in keys:
+                p.path.removeAttribute(k)
 
-        for k, v in attrs.items():
-            given_path[0].path.setAttribute(k, v)
+            for k, v in a.items():
+                p.path.setAttribute(k, v)
         return txt
 
     def group(self, path):
         """
         returns a list of paths sharing the same style
         """
-        attrs = {k: v for k, v in path.path.attributes.items()}
-        
         attrs = {k: v for k, v in path.path.attributes.items()
                  if k not in ['d', 'transform']}
         paths = []

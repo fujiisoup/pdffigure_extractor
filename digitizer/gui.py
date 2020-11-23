@@ -73,6 +73,7 @@ class SvgView(QWebEngineView):
         return pos / dpi
 
     def onPress(self, event):
+        self.unselect_group()
         self._pressed_position = self.svd_position(
             np.array([event.pos().x(), event.pos().y()]))
 
@@ -92,44 +93,54 @@ class SvgView(QWebEngineView):
             )
             self.draw()
     
-    def draw(self, group=False):
+    def draw(self):
         if not self.is_selected():
             return
-        if group:
-            self._selected_group = self._original_paths.group(self._selected_path)
-            new_svd = self._original_paths.appended_svd(self._selected_group)
+        if self.is_group:
+            new_svg = self._original_paths.appended_svd(
+                self._selected_group)
         else:
-            new_svd = self._original_paths.appended_svd(
+            new_svg = self._original_paths.appended_svd(
                 self._selected_path, self._selected_point)
-        self.setHtml(new_svd)
+        self.setHtml(new_svg)
 
     def is_selected(self):
         if self._selected_path is None or len(self._selected_path.abs_path) == 0:
             return False
         return True
 
+    @property
+    def is_group(self):
+        return self._selected_group is not None
+
     def select_group(self):
         if self.is_selected():
             self._selected_group = self._original_paths.group(self._selected_path)        
-        self.draw(group=True)
+        self.draw()
 
     def unselect_group(self):
         self._selected_group = None
         self.draw()
 
-    def selected(self, use_group=False):
+    def selected(self, use_center=False):
+        """
+        use_group: select group
+        use_center: only returns center of each path. otherwise, returns concatenated path
+        """
         if not self.is_selected():
             return None
-        if use_group:
-            if self.selected_group is None:
-                self._select_group()
-                self.draw()
+        if self.is_group:
             # draw highlighted svd
-            new_svd = self._original_paths.appended_svd(paths)
-            self.setHtml(new_svd)
-            return np.stack([p.center for p in paths], axis=0)
+            paths = self._selected_group
+            if use_center:
+                return np.stack([p.center for p in paths], axis=0)
+            else:
+                return np.concatenate([p.abs_path for p in paths], axis=0)
         else:
-            return np.stack(self._selected_path.abs_path, axis=0)
+            if use_center:
+                return np.array([self._selected_path.center])
+            else:
+                return np.stack(self._selected_path.abs_path, axis=0)
 
 
 # Main Windows
@@ -179,7 +190,8 @@ class MainWidget(QWidget):
         #
         self.XScaleType = 'linear'
         self.YScaleType = 'linear'
-
+        self.FigureType = 'marker'
+        
         # output
         self.Xsampled = None
         self.Ysampled = None
@@ -188,16 +200,14 @@ class MainWidget(QWidget):
         self.y = None
 
         (self.Page, 
-        self.Xlinear,
-        self.Xlog,
-        self.Ylinear,
-        self.Ylog,
+        self.Xlinear, self.Xlog,
+        self.Ylinear, self.Ylog,
         self.WebView,
         self.HintLabel,
-        self.X0Label,
-        self.Y0Label,
-        self.X1Label,
-        self.Y1Label) = self.initUI()
+        self.X0Label, self.Y0Label,
+        self.X1Label, self.Y1Label,
+        self.IsMarker, self.IsLine
+        ) = self.initUI()
 
         self.show()
 
@@ -283,11 +293,20 @@ class MainWidget(QWidget):
         # ----------------------------------
         VBoxSx5 = QGroupBox()
         LayoutSx5 = QGridLayout()
+        
+        IsMarker = QRadioButton('marker')
+        IsMarker.setChecked(True)
+        IsLine = QRadioButton('line')
+        IsMarker.clicked.connect(self.setGraphType)
+        IsLine.clicked.connect(self.setGraphType)
+
+        LayoutSx5.addWidget(IsMarker,0,0)
+        LayoutSx5.addWidget(IsLine,0,1)
 
         PickPointButton = QPushButton('find group',self)
         PickPointButton.clicked.connect(self.findGroup)
 
-        LayoutSx5.addWidget(PickPointButton,0,0)
+        LayoutSx5.addWidget(PickPointButton,1,0)
         VBoxSx5.setLayout(LayoutSx5)
         # ----------------------------------
         VBoxSx6 = QGroupBox()
@@ -349,7 +368,8 @@ class MainWidget(QWidget):
         # ----------------------------------
         return (LoadPageButton, 
                 Xlinear, Xlog, Ylinear, Ylog, WebView, HintLabel,
-                X0Label, Y0Label, X1Label, Y1Label)
+                X0Label, Y0Label, X1Label, Y1Label,
+                IsMarker, IsLine)
 
     def loadImage(self):
         self.filename, _ = QFileDialog.getOpenFileName()
@@ -445,6 +465,12 @@ class MainWidget(QWidget):
         elif self.Ylog.isChecked():
             self.YScaleType = 'log'
 
+    def setGraphType(self):
+        if self.IsLine.isChecked():
+            self.FigureType = 'line'
+        elif self.IsMarker.isChecked():
+            self.FigureType = 'marker'
+
     def _convert(self, x, x0pic, x1pic, x0real, x1real, use_log=False):
         if use_log:
             val = self._convert(
@@ -466,7 +492,7 @@ class MainWidget(QWidget):
     def _display_value(self):
         if not hasattr(self, 'WebView'):
             return
-        xy = self.WebView.selected()
+        xy = self.WebView.selected(use_center=self.FigureType == 'marker')
         if xy is None:
             return
         self.Xsampled, self.Ysampled = xy[:, 0], xy[:, 1]
@@ -502,11 +528,12 @@ class MainWidget(QWidget):
                 self.HintLabel.setText('Please pick {}'.format(label))
                 return
 
-        fname , _ = QFileDialog.getSaveFileName(self)
-        array = np.stack([
-            self.convert_x(self.Xsampled), self.convert_y(self.Ysampled)
-        ], axis=1)
-        np.savetxt(fname, array)
+        fname, isOK = QFileDialog.getSaveFileName(self)
+        if isOK:
+            array = np.stack([
+                self.convert_x(self.Xsampled), self.convert_y(self.Ysampled)
+            ], axis=1)
+            np.savetxt(fname, array)
 
 
 class ScrollLabel(QScrollArea):
