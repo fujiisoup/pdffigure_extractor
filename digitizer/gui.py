@@ -38,6 +38,7 @@ class SvgView(QWebEngineView):
         self._selected_path = None
         self._previous_pos = (0, 0)
         self.loadFinished.connect(self._scroll_to_previous)
+        self._pressed_position = None
 
     def _scroll_to_previous(self):
         page = self.page()
@@ -70,11 +71,21 @@ class SvgView(QWebEngineView):
         print(view_x, pos / dpi)
         return pos / dpi
 
-    def onClick(self, event):
-        pos = event.pos()
-        pos = self.svd_position(np.array([pos.x(), pos.y()]))
+    def onPress(self, event):
+        self._pressed_position = self.svd_position(
+            np.array([event.pos().x(), event.pos().y()]))
+
+    def onRelease(self, event):
+        current_position = self.svd_position(
+            np.array([event.pos().x(), event.pos().y()]))
         if self._original_paths is not None:
-            self._selected_path = self._original_paths.find_nearest(pos)
+            # find if there is a path inside the selected region
+            self._selected_path = self._original_paths.find_inside(
+                self._pressed_position, current_position)
+
+            if self._selected_path is None:
+                # consider the release position
+                self._selected_path = self._original_paths.find_nearest(current_position)
             new_svd = self._original_paths.appended_svd(self._selected_path)
             self.setHtml(new_svd)
 
@@ -305,7 +316,10 @@ class MainWidget(QWidget):
                 self._glwidget[-1].installEventFilter(self)
         elif (event.type() == QEvent.MouseButtonPress and
               source in self._glwidget):
-            self.WebView.onClick(event)
+            self.WebView.onPress(event)
+        elif (event.type() == QEvent.MouseButtonRelease and
+              source in self._glwidget):
+            self.WebView.onRelease(event)
         return super().eventFilter(source, event)
 
     def _select(self, x_or_y):

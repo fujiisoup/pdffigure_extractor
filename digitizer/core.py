@@ -97,6 +97,17 @@ class Path:
             for i in range(len(self.abs_path) - 1)]
         return np.min(distances)
 
+    def is_inside(self, xmin, xmax):
+        return all([
+            ((xmin <= path) * (path <= xmax)).all() 
+            for path in self.abs_path
+        ])
+    
+    @property
+    def size2(self):
+        dx = np.nanmax(self.abs_path, axis=0) - np.nanmin(self.abs_path)
+        return dx @ dx
+
     @property
     def center(self):
         return 0.5 * (
@@ -138,6 +149,17 @@ class Paths:
         distances = [path.distance2(point) for path in self.paths]
         i = np.nanargmin(distances)
         return self.paths[i]
+
+    def find_inside(self, point0, point1):
+        x = self._from_inch(np.stack([point0, point1], axis=0))
+        xmin, xmax = np.min(x, axis=0), np.max(x, axis=0)
+        
+        paths = [path for path in self.paths if path.is_inside(xmin, xmax)]
+        if len(paths) > 0:
+            idx = np.argmax([path.size2 for path in paths])
+            return paths[idx]
+        else:
+            return None
 
     def appended_svd(self, path):
         svg0 = self.svg[:self.svg.find('</svg>')]
