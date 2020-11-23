@@ -11,5 +11,5 @@ def test_distance2(x0, x1, x, distance_squared):
     x0 = np.array(x0)
     x1 = np.array(x1)
     x = np.array(x)
-    assert np.allclose(geometry.distance2(x0, x1, x), distance_squared)
+    assert np.allclose(geometry.distance2(x, x0, x1), distance_squared)
 

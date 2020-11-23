@@ -88,6 +88,9 @@ class Path:
         return self._abs_path
 
     def distance2(self, point):
+        """
+        Return nearest distance
+        """
         if len(self.abs_path) == 0:
             return np.nan
         elif len(self.abs_path) == 1:
@@ -97,9 +100,21 @@ class Path:
         
         distances = [
             geometry.distance2(
-                self.abs_path[i], self.abs_path[i+1], point) 
+                point, self.abs_path[i], self.abs_path[i+1]) 
             for i in range(len(self.abs_path) - 1)]
         return np.min(distances)
+
+    def closest_point(self, point):
+        """
+        Return the nearest point and distace
+        """
+        if len(self.abs_path) == 0:
+            return np.nan
+        idx = np.nanargmin([
+            geometry.distance2(point, path)
+            for path in self.abs_path
+        ])
+        return self.abs_path[idx]
 
     def is_inside(self, xmin, xmax):
         return all([
@@ -150,6 +165,8 @@ class Paths:
     def find_nearest(self, point):
         """
         Find the nearest path with given points = (x, y) with unit inch
+        
+        if node is True, we find the closest node
         """
         point = self._from_inch(np.array(point))
         distances = [path.distance2(point) for path in self.paths]
@@ -169,16 +186,41 @@ class Paths:
         else:
             return None
 
-    def appended_svd(self, path):
+    def find_nearest_point(self, path, point):
+        point = self._from_inch(np.array(point))
+        return path.closest_point(point)
+
+    def appended_svd(self, given_path, point):
         svg0 = self.svg[:self.svg.find('</svg>')]
-        
+        txt = svg0
+        # keep oritinal attributes
+        attrs = {k: v for k, v in given_path.path.attributes.items()}
+
         color = '#FF0000'
-        path = copy.copy(path.path)
+        # copy
+        path = copy.copy(given_path.path)
         path.setAttribute('stroke', color)
-        path.setAttribute('stroke-width', '1')
+        path.setAttribute('stroke-width', '3')
         path.setAttribute('fill', 'none')
 
-        return svg0 + path.toxml() + '\n</svg>'
+        txt = svg0 + path.toxml() + '\n'
+        # draw the point
+        dp = 0.1
+        path2 = copy.copy(given_path.path)
+        path2.setAttribute('d', 
+        'M {} {} v {} h {} v -{} z'.format(
+            *(point - dp), dp, dp, dp))
+        path2.setAttribute('stroke-width', '3')
+        path2.setAttribute('stroke-linejoin', "round")
+        path2.setAttribute(
+            'transform',
+            "matrix(1,0,0,1,0,0)")
+
+        txt = txt + path2.toxml() + '\n</svg>'
+        # make sure the original path does not change
+        for k, v in attrs.items():
+            given_path.path.setAttribute(k, v)
+        return txt
 
     def group(self, path, mode='style'):
         """

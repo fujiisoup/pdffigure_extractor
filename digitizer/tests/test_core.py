@@ -6,7 +6,8 @@ from .. import core
 
 
 filename = '../example_pdfs/test_figure1.pdf'
-filename2 = '../example_pdfs/1908.10464.pdf'
+# filename2 = '../example_pdfs/1908.10464.pdf'
+filename2 = '../example_pdfs/example2.pdf'
 
 def test_to_svg():
     with open('test.svg', 'w') as f:
@@ -21,7 +22,7 @@ def test_to_svg():
 
 def test_to_svg2():
     with open('test2.svg', 'w') as f:
-        f.write(core._to_svg(filename2, page=1))
+        f.write(core._to_svg(filename2, page=2))
 
 
 def test_distance():

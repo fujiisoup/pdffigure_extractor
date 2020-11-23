@@ -36,6 +36,7 @@ class SvgView(QWebEngineView):
         super().__init__()
         self._original_paths = None
         self._selected_path = None
+        self._selected_point = None
         self._previous_pos = (0, 0)
         self.loadFinished.connect(self._scroll_to_previous)
         self._pressed_position = None
@@ -85,7 +86,12 @@ class SvgView(QWebEngineView):
             if self._selected_path is None:
                 # consider the release position
                 self._selected_path = self._original_paths.find_nearest(current_position)
-            new_svd = self._original_paths.appended_svd(self._selected_path)
+            self._selected_point = self._original_paths.find_nearest_point(
+                self._selected_path, current_position
+            )
+
+            new_svd = self._original_paths.appended_svd(
+                self._selected_path, self._selected_point)
             self.setHtml(new_svd)
 
     def selected(self, use_group=False):
@@ -357,42 +363,46 @@ class MainWidget(QWidget):
         self.WebView.setFocusPolicy( Qt.ClickFocus )
         self.WebView.setFocus()
 
-        pic_val = self.WebView._selected_path.center[idx]
+        pic_val = self.WebView._selected_point[idx]
 
         self.HintLabel.setText('Provide the corresponding {} value.'.format(x_or_y))
         real_val, okPressed = QInputDialog.getDouble(
             self, "Set {} value".format(x_or_y), 
             "Value:", value=0, decimals=4)
         self.HintLabel.setText('')
-        return pic_val, real_val
+        return pic_val, real_val, okPressed
 
     def select_X0(self):
         if self.WebView._selected_path is not None:
-            pic, real = self._select('x')
-            self.X0pic = pic
-            self.X0real = real
-            self.X0Label.setText(str(self.X0real))
+            pic, real, is_ok = self._select('x')
+            if is_ok:
+                self.X0pic = pic
+                self.X0real = real
+                self.X0Label.setText(str(self.X0real))
 
     def select_X1(self):
         if self.WebView._selected_path is not None:
-            pic, real = self._select('x')
-            self.X1pic = pic
-            self.X1real = real
-            self.X1Label.setText(str(self.X1real))
+            pic, real, is_ok = self._select('x')
+            if is_ok:
+                self.X1pic = pic
+                self.X1real = real
+                self.X1Label.setText(str(self.X1real))
 
     def select_Y0(self):
         if self.WebView._selected_path is not None:
-            pic, real = self._select('y')
-            self.Y0pic = pic
-            self.Y0real = real
-            self.Y0Label.setText(str(self.Y0real))
+            pic, real, is_ok = self._select('y')
+            if is_ok:
+                self.Y0pic = pic
+                self.Y0real = real
+                self.Y0Label.setText(str(self.Y0real))
 
     def select_Y1(self):
         if self.WebView._selected_path is not None:
-            pic, real = self._select('y')
-            self.Y1pic = pic
-            self.Y1real = real
-            self.Y1Label.setText(str(self.Y1real))
+            pic, real, is_ok = self._select('y')
+            if is_ok:
+                self.Y1pic = pic
+                self.Y1real = real
+                self.Y1Label.setText(str(self.Y1real))
 
     def setXScaleType(self):
         if self.Xlinear.isChecked():
