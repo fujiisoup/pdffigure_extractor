@@ -7,8 +7,8 @@ import numpy as np
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QGridLayout,
     QGroupBox, QPushButton, QFileDialog, QSizePolicy,
-    QRadioButton, QInputDialog, QLabel, QDesktopWidget,
-    QGraphicsView, QGraphicsScene, QGraphicsItem, QGraphicsRectItem)
+    QRadioButton, QInputDialog, QLabel, QDesktopWidget, QScrollArea,
+    QGraphicsView, QGraphicsScene, QGraphicsItem, QGraphicsRectItem, QVBoxLayout)
 from PyQt5.QtGui import QBrush, QColor, QImage, QPainter, QPixmap, QPen
 from PyQt5.QtCore import Qt, QObject, QEvent
 
@@ -89,6 +89,14 @@ class SvgView(QWebEngineView):
             new_svd = self._original_paths.appended_svd(self._selected_path)
             self.setHtml(new_svd)
 
+    def selected(self, use_group=False):
+        if self._selected_path is None:
+            return None
+        if use_group:
+            raise NotImplementedError
+        else:
+            return np.stack(self._selected_path.abs_path, axis=-1)
+
 
 # Main Windows
 class Windows(QMainWindow):
@@ -124,15 +132,15 @@ class MainWidget(QWidget):
     def __init__(self, parent):
         super().__init__()
         # input
-        self.Xpic_min = None
-        self.Xpic_max = None
-        self.Ypic_min = None
-        self.Ypic_max = None
+        self.X0pic = None
+        self.X1pic = None
+        self.Y0pic = None
+        self.Y1pic = None
         #
-        self.Xreal_min = None
-        self.Yreal_min = None
-        self.Xreal_max = None
-        self.Yreal_max = None
+        self.X0real = None
+        self.Y0real = None
+        self.X1real = None
+        self.Y1real = None
         #
         self.XScaleType = 'linear'
         self.YScaleType = 'linear'
@@ -172,34 +180,34 @@ class MainWidget(QWidget):
         VBoxSx1.setLayout(LayoutSx1)
         # ----------------------------------
         VBoxSx2 = QGroupBox()
-        VBoxSx2.setTitle('Picture limits')
+        VBoxSx2.setTitle('Axis values')
         LayoutSx2 = QGridLayout()
         #
-        XminButton = QPushButton('Pick X_min',self)
+        X0Button = QPushButton('Pick X0',self)
         X0Label = QLabel(self)
         X0Label.setStyleSheet(('background-color : white; color: black'))
-        YminButton = QPushButton('Pick Y_min',self)
-        Y0Label = QLabel(self)
-        Y0Label.setStyleSheet(('background-color : white; color: black'))
-        XmaxButton = QPushButton('Pick X_max',self)
+        X1Button = QPushButton('Pick X1',self)
         X1Label = QLabel(self)
         X1Label.setStyleSheet(('background-color : white; color: black'))
-        YmaxButton = QPushButton('Pick Y_max',self)
+        Y0Button = QPushButton('Pick Y0',self)
+        Y0Label = QLabel(self)
+        Y0Label.setStyleSheet(('background-color : white; color: black'))
+        Y1Button = QPushButton('Pick Y1',self)
         Y1Label = QLabel(self)
         Y1Label.setStyleSheet(('background-color : white; color: black'))
         #
-        XminButton.clicked.connect(self.select_X0)
-        YminButton.clicked.connect(self.select_Y0)
-        XmaxButton.clicked.connect(self.select_X1)
-        YmaxButton.clicked.connect(self.select_Y1)
+        X0Button.clicked.connect(self.select_X0)
+        X1Button.clicked.connect(self.select_X1)
+        Y0Button.clicked.connect(self.select_Y0)
+        Y1Button.clicked.connect(self.select_Y1)
         #
-        LayoutSx2.addWidget(XminButton,0,0)
+        LayoutSx2.addWidget(X0Button,0,0)
         LayoutSx2.addWidget(X0Label,0,1)
-        LayoutSx2.addWidget(YminButton,1,0)
-        LayoutSx2.addWidget(Y0Label,1,1)
-        LayoutSx2.addWidget(XmaxButton,2,0)
-        LayoutSx2.addWidget(X1Label,2,1)
-        LayoutSx2.addWidget(YmaxButton,3,0)
+        LayoutSx2.addWidget(X1Button,1,0)
+        LayoutSx2.addWidget(X1Label,1,1)
+        LayoutSx2.addWidget(Y0Button,2,0)
+        LayoutSx2.addWidget(Y0Label,2,1)
+        LayoutSx2.addWidget(Y1Button,3,0)
         LayoutSx2.addWidget(Y1Label,3,1)
         #
         VBoxSx2.setLayout(LayoutSx2)
@@ -235,8 +243,8 @@ class MainWidget(QWidget):
         VBoxSx5 = QGroupBox()
         LayoutSx5 = QGridLayout()
 
-        PickPointButton = QPushButton('Pick Points',self)
-        PickPointButton.clicked.connect(self.pickPoints)
+        PickPointButton = QPushButton('find group',self)
+        PickPointButton.clicked.connect(self.findGroup)
 
         LayoutSx5.addWidget(PickPointButton,0,0)
         VBoxSx5.setLayout(LayoutSx5)
@@ -245,19 +253,18 @@ class MainWidget(QWidget):
         LayoutSx6 = QGridLayout()
 
         SaveToFileButton = QPushButton('Save to File',self)
-        TestDataButton = QPushButton('Test data',self)
         SaveToFileButton.clicked.connect(self.saveToFile)
-        TestDataButton.clicked.connect(self.testData)
-
+        
         LayoutSx6.addWidget(SaveToFileButton,0,0)
-        LayoutSx6.addWidget(TestDataButton,1,0)
         VBoxSx6.setLayout(LayoutSx6)
         # ----------------------------------
         VBoxSx7 = QGroupBox()
         LayoutSx7 = QGridLayout()
-        HintLabel = QLabel(self)
+        HintLabel = ScrollLabel(self)
         HintLabel.setMaximumHeight(40)
         HintLabel.setStyleSheet(('background-color : white; color: black'))
+        HintLabel.setWordWrap(True)
+        HintLabel.setTextInteractionFlags(Qt.TextSelectableByMouse)
         HintLabel.setText('')
 
         LayoutSx7.addWidget(HintLabel,1,0)
@@ -320,6 +327,8 @@ class MainWidget(QWidget):
         elif (event.type() == QEvent.MouseButtonRelease and
               source in self._glwidget):
             self.WebView.onRelease(event)
+        
+        self._display_value()
         return super().eventFilter(source, event)
 
     def _select(self, x_or_y):
@@ -338,28 +347,32 @@ class MainWidget(QWidget):
         return pic_val, real_val
 
     def select_X0(self):
-        pic, real = self._select('x')
-        self.Xpic_min = pic
-        self.Xreal_min = real
-        self.X0Label.setText(str(self.Xreal_min))
+        if self.WebView._selected_path is not None:
+            pic, real = self._select('x')
+            self.X0pic = pic
+            self.X0real = real
+            self.X0Label.setText(str(self.X0real))
 
     def select_X1(self):
-        pic, real = self._select('x')
-        self.Xpic_max = pic
-        self.Xreal_max = real
-        self.X1Label.setText(str(self.Xreal_max))
+        if self.WebView._selected_path is not None:
+            pic, real = self._select('x')
+            self.X1pic = pic
+            self.X1real = real
+            self.X1Label.setText(str(self.X1real))
 
     def select_Y0(self):
-        pic, real = self._select('y')
-        self.Ypic_min = pic
-        self.Yreal_min = real
-        self.Y0Label.setText(str(self.Yreal_min))
+        if self.WebView._selected_path is not None:
+            pic, real = self._select('y')
+            self.Y0pic = pic
+            self.Y0real = real
+            self.Y0Label.setText(str(self.Y0real))
 
     def select_Y1(self):
-        pic, real = self._select('y')
-        self.Ypic_max = pic
-        self.Yreal_max = real
-        self.Y1Label.setText(str(self.Yreal_max))
+        if self.WebView._selected_path is not None:
+            pic, real = self._select('y')
+            self.Y1pic = pic
+            self.Y1real = real
+            self.Y1Label.setText(str(self.Y1real))
 
     def setXScaleType(self):
         if self.Xlinear.isChecked():
@@ -373,7 +386,49 @@ class MainWidget(QWidget):
         elif self.Ylog.isChecked():
             self.YScaleType = 'log'
 
-    def pickPoints(self):
+    def _convert(self, x, x0pic, x1pic, x0real, x1real, use_log=False):
+        if use_log:
+            val = self._convert(
+                x, x0pic, x1pic, 
+                np.log10(x0real), np.log10(x1real), use_log=False)
+            return 10**val
+        return (x - x0pic) / (x1pic - x0pic) * (x1real - x0real) + x0real
+
+    def convert_x(self, x):
+        return self._convert(
+            x, self.X0pic, self.X1pic, self.X0pic, self.X1pic, 
+            self.XScaleType == 'log')
+
+    def convert_y(self, y):
+        return self._convert(
+            y, self.Y0pic, self.Y1pic, self.Y0pic, self.Y1pic, 
+            self.YScaleType == 'log')
+
+    def _display_value(self):
+        if not hasattr(self, 'WebView'):
+            return
+        xy = self.WebView.selected()
+        if xy is None:
+            return
+        self.Xsampled, self.Ysampled = xy[0], xy[1]
+
+        if all(v is not None for v in [
+            self.X0pic, self.X1pic, self.Y0pic, self.Y1pic,
+            self.X0real, self.Y0real, self.X1real, self.Y1real]
+        ):
+            self.HintLabel.setText(
+                '**** calibrated values ****\n{}'.format(
+                    np.stack([
+                        self.convert_x(self.Xsampled), self.convert_y(self.Ysampled)
+                    ], axis=1))
+            )            
+        else:
+            self.HintLabel.setText(
+                '#### raw values ####\n{}'.format(
+                    np.stack([self.Xsampled, self.Ysampled], axis=1))
+            )            
+
+    def findGroup(self):
 
         self.HintLabel.setText('Pick points: please note that if you zoom, '
                                'the first click (for zooming) is registered. '
@@ -393,86 +448,61 @@ class MainWidget(QWidget):
         self.HintLabel.setText('')
 
     def saveToFile(self):
-
-        if self.Xpic_min is None:
-            self.HintLabel.setText('Please pick X_min')
-            return
-        elif self.Ypic_min is None:
-            self.HintLabel.setText('Please pick Y_min')
-            return
-        elif self.Xpic_max is None:
-            self.HintLabel.setText('Please pick X_max')
-            return
-        elif self.Ypic_max is None:
-            self.HintLabel.setText('Please pick Y_max')
-            return
-        elif self.Xreal_min is None:
-            self.HintLabel.setText('Please pick X_min')
-            return
-        elif self.Yreal_min is None:
-            self.HintLabel.setText('Please pick Y_min')
-            return
-        elif self.Xreal_max is None:
-            self.HintLabel.setText('Please pick X_max')
-            return
-        elif self.Yreal_max is None:
-            self.HintLabel.setText('Please pick Y_max')
-            return
-        elif self.Xsampled is None:
-            self.HintLabel.setText('Please pick data')
-            return
-        elif self.Ysampled is None:
-            self.HintLabel.setText('Please pick data')
-            return
-        else:
-            self.HintLabel.setText('')
-
-        self.x = []
-        self.y = []
-
-        if self.XScaleType is 'linear':
-            for xs in self.Xsampled:
-                self.x.append(self.Xreal_min + (self.Xreal_max - self.Xreal_min) / (self.Xpic_max - self.Xpic_min) * ( xs - self.Xpic_min))
-        elif self.XScaleType is 'log':
-            Xreal_min = log10(self.Xreal_min)
-            Xreal_max = log10(self.Xreal_max)
-            for xs in self.Xsampled:
-                self.x.append(10 ** (Xreal_min + (xs - self.Xpic_min)/(self.Xpic_max - self.Xpic_min) * (Xreal_max - Xreal_min)))
-
-        if self.YScaleType is 'linear':
-            for ys in self.Ysampled:
-                self.y.append(self.Yreal_min + (self.Yreal_max - self.Yreal_min) / (self.Ypic_max - self.Ypic_min) * ( ys - self.Ypic_min))
-        elif self.YScaleType is 'log':
-            Yreal_min = log10(self.Yreal_min)
-            Yreal_max = log10(self.Yreal_max)
-            for ys in self.Ysampled:
-                self.y.append(10 ** (Yreal_min + (ys - self.Ypic_min)/(self.Ypic_max - self.Ypic_min) * (Yreal_max - Yreal_min)))
+        for x, label in [
+            (self.X0pic, 'X0'), (self.X1pic, 'X1'),
+            (self.X0real, 'X0'), (self.X1real, 'X1'),
+            (self.Y0pic, 'Y0'), (self.Y1pic, 'Y1'),
+            (self.Y0real, 'Y0'), (self.Y1real, 'Y1'),
+            (self.Xsampled, 'data'), (self.Ysampled, 'data'),
+        ]:
+            if x is None:
+                self.HintLabel.setText('Please pick {}'.format(label))
+                return
 
         fname , _ = QFileDialog.getSaveFileName(self)
+        array = np.stack([
+            self.convert_x(self.Xsampled), self.convert_y(self.Ysampled)
+        ], axis=1)
+        np.savetxt(fname, array)
 
-        with open(fname, 'w') as fid:
-            for xpt, ypt in zip(self.x, self.y):
-                fid.write("{} {}\n".format(xpt, ypt))
 
-    def testData(self):
+class ScrollLabel(QScrollArea):
+    # contructor
+    def __init__(self, *args, **kwargs):
+        QScrollArea.__init__(self, *args, **kwargs)
 
-        filename, _ = QFileDialog.getOpenFileName()
+        # making widget resizable
+        self.setWidgetResizable(True)
 
-        xs = []
-        ys = []
-        with open(filename, 'r') as fid:
-            for line in fid:
-                line = line.split(' ')
-                xs.append(float(line[0]))
-                ys.append(float(line[1]))
-        hf = plt.figure()
-        plt.plot(xs, ys,'C0-o')
-        ax = hf.gca()
-        ax.set_xlabel('x variable')
-        ax.set_ylabel('y variable')
-        ax.set_xscale(self.XScaleType)
-        ax.set_yscale(self.YScaleType)
-        plt.show()
+        # making qwidget object
+        content = QWidget(self)
+        self.setWidget(content)
+
+        # vertical box layout
+        lay = QVBoxLayout(content)
+
+        # creating label
+        self.label = QLabel(content)
+
+        # setting alignment to the text
+        self.label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+
+        # making label multi-line
+        self.label.setWordWrap(True)
+
+        # adding label to the layout
+        lay.addWidget(self.label)
+
+    # the setText method
+    def setText(self, text):
+        # setting text to the label
+        self.label.setText(text)
+    
+    def setWordWrap(self, flag):
+        self.label.setWordWrap(flag)
+
+    def setTextInteractionFlags(self, flag):
+        self.label.setTextInteractionFlags(Qt.TextSelectableByMouse)
 
 
 # Start App
