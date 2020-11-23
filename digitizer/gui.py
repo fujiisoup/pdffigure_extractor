@@ -35,14 +35,14 @@ class SvgView(QWebEngineView):
     def __init__(self):
         super().__init__()
         self._original_paths = None
-        self._selected_paths = []
+        self._selected_path = None
         self._previous_pos = (0, 0)
         self.loadFinished.connect(self._scroll_to_previous)
 
     def _scroll_to_previous(self):
         page = self.page()
-        page.runJavaScript('window.scroll({}, {});'.format(
-            *self._previous_pos))
+        # page.runJavaScript('window.scrollTo({}, "smooth");'.format(
+        #    self._previous_pos[0]))
 
     def loadSvg(self, txt):
         self._original_paths = core.Paths(txt)
@@ -74,38 +74,9 @@ class SvgView(QWebEngineView):
         pos = event.pos()
         pos = self.svd_position(np.array([pos.x(), pos.y()]))
         if self._original_paths is not None:
-            path = self._original_paths.find_nearest(pos)
-            new_svd = self._original_paths.appended_svd(path)
+            self._selected_path = self._original_paths.find_nearest(pos)
+            new_svd = self._original_paths.appended_svd(self._selected_path)
             self.setHtml(new_svd)
-
-
-# FigureCanvas
-class MplCanvas(FigureCanvas):
-    """Ultimately, this is a QWidget (as well as a FigureCanvasAgg, etc.)."""
-
-    def __init__(self, parent=None, width=5, height=4, dpi=100, filename=None):
-        fig = Figure(figsize=(width, height), dpi=dpi)
-        self.axes = fig.add_subplot(111)
-
-        self.compute_initial_figure(filename)
-
-        FigureCanvas.__init__(self, fig)
-        self.setParent(parent)
-
-        FigureCanvas.setSizePolicy(self,
-                                   QSizePolicy.Expanding,
-                                   QSizePolicy.Expanding)
-        FigureCanvas.updateGeometry(self)
-
-    def compute_initial_figure(self,  filename):
-
-        if filename is None:
-            self.axes.clear()
-        else:
-            img = plt.imread(filename)
-            self.axes.clear()
-            self.axes.imshow(img)
-            self.axes.axis('off')
 
 
 # Main Windows
@@ -168,10 +139,10 @@ class MainWidget(QWidget):
         self.Ylog,
         self.WebView,
         self.HintLabel,
-        self.XminLabel,
-        self.YminLabel,
-        self.XmaxLabel,
-        self.YmaxLabel) = self.initUI()
+        self.X0Label,
+        self.Y0Label,
+        self.X1Label,
+        self.Y1Label) = self.initUI()
 
         self.show()
 
@@ -194,31 +165,31 @@ class MainWidget(QWidget):
         LayoutSx2 = QGridLayout()
         #
         XminButton = QPushButton('Pick X_min',self)
-        XminLabel = QLabel(self)
-        XminLabel.setStyleSheet(('background-color : white; color: black'))
+        X0Label = QLabel(self)
+        X0Label.setStyleSheet(('background-color : white; color: black'))
         YminButton = QPushButton('Pick Y_min',self)
-        YminLabel = QLabel(self)
-        YminLabel.setStyleSheet(('background-color : white; color: black'))
+        Y0Label = QLabel(self)
+        Y0Label.setStyleSheet(('background-color : white; color: black'))
         XmaxButton = QPushButton('Pick X_max',self)
-        XmaxLabel = QLabel(self)
-        XmaxLabel.setStyleSheet(('background-color : white; color: black'))
+        X1Label = QLabel(self)
+        X1Label.setStyleSheet(('background-color : white; color: black'))
         YmaxButton = QPushButton('Pick Y_max',self)
-        YmaxLabel = QLabel(self)
-        YmaxLabel.setStyleSheet(('background-color : white; color: black'))
+        Y1Label = QLabel(self)
+        Y1Label.setStyleSheet(('background-color : white; color: black'))
         #
-        XminButton.clicked.connect(self.pickXmin)
-        YminButton.clicked.connect(self.pickYmin)
-        XmaxButton.clicked.connect(self.pickXmax)
-        YmaxButton.clicked.connect(self.pickYmax)
+        XminButton.clicked.connect(self.select_X0)
+        YminButton.clicked.connect(self.select_Y0)
+        XmaxButton.clicked.connect(self.select_X1)
+        YmaxButton.clicked.connect(self.select_Y1)
         #
         LayoutSx2.addWidget(XminButton,0,0)
-        LayoutSx2.addWidget(XminLabel,0,1)
+        LayoutSx2.addWidget(X0Label,0,1)
         LayoutSx2.addWidget(YminButton,1,0)
-        LayoutSx2.addWidget(YminLabel,1,1)
+        LayoutSx2.addWidget(Y0Label,1,1)
         LayoutSx2.addWidget(XmaxButton,2,0)
-        LayoutSx2.addWidget(XmaxLabel,2,1)
+        LayoutSx2.addWidget(X1Label,2,1)
         LayoutSx2.addWidget(YmaxButton,3,0)
-        LayoutSx2.addWidget(YmaxLabel,3,1)
+        LayoutSx2.addWidget(Y1Label,3,1)
         #
         VBoxSx2.setLayout(LayoutSx2)
         # ----------------------------------
@@ -318,7 +289,7 @@ class MainWidget(QWidget):
         # ----------------------------------
         # ----------------------------------
         return (Xlinear, Xlolg, Ylinear, Ylog, WebView, HintLabel,
-                XminLabel, YminLabel, XmaxLabel, YmaxLabel)
+                X0Label, Y0Label, X1Label, Y1Label)
 
     def loadImage(self):
         filename, _ = QFileDialog.getOpenFileName()
@@ -337,57 +308,44 @@ class MainWidget(QWidget):
             self.WebView.onClick(event)
         return super().eventFilter(source, event)
 
-    def pickXmin(self):
-
-        self.HintLabel.setText('Click at a tick on x axis.')
+    def _select(self, x_or_y):
+        idx = {'x': 0, 'y': 1}[x_or_y]
+        self.HintLabel.setText('Click at a tick on {} axis.'.format(x_or_y))
         self.WebView.setFocusPolicy( Qt.ClickFocus )
         self.WebView.setFocus()
-        # pt = self.WebView.figure.ginput(n=1)
-        # self.Xpic_min = pt[0][0]
 
-        self.HintLabel.setText('Provide the minimum x value.')
-        self.Xreal_min, okPressed = QInputDialog.getDouble(self, "Set X_min value", "Value:", value=0, decimals=4)
+        pic_val = self.WebView._selected_path.center[idx]
+
+        self.HintLabel.setText('Provide the corresponding {} value.'.format(x_or_y))
+        real_val, okPressed = QInputDialog.getDouble(
+            self, "Set {} value".format(x_or_y), 
+            "Value:", value=0, decimals=4)
         self.HintLabel.setText('')
-        self.XminLabel.setText(str(self.Xreal_min))
+        return pic_val, real_val
 
-    def pickYmin(self):
+    def select_X0(self):
+        pic, real = self._select('x')
+        self.Xpic_min = pic
+        self.Xreal_min = real
+        self.X0Label.setText(str(self.Xreal_min))
 
-        self.HintLabel.setText('Click at a point having minimum y value.')
-        self.FigCanvas.setFocusPolicy( Qt.ClickFocus )
-        self.FigCanvas.setFocus()
-        pt = self.FigCanvas.figure.ginput(n=1)
-        self.Ypic_min = pt[0][1]
+    def select_X1(self):
+        pic, real = self._select('x')
+        self.Xpic_max = pic
+        self.Xreal_max = real
+        self.X1Label.setText(str(self.Xreal_max))
 
-        self.HintLabel.setText('Provide the minimum y value.')
-        self.Yreal_min, okPressed = QInputDialog.getDouble(self, "Set Y_min value", "Value:", value=0, decimals=4)
-        self.HintLabel.setText('')
-        self.YminLabel.setText(str(self.Yreal_min))
+    def select_Y0(self):
+        pic, real = self._select('y')
+        self.Ypic_min = pic
+        self.Yreal_min = real
+        self.Y0Label.setText(str(self.Yreal_min))
 
-    def pickXmax(self):
-
-        self.HintLabel.setText('Click at a point having maximum x value.')
-        self.FigCanvas.setFocusPolicy( Qt.ClickFocus )
-        self.FigCanvas.setFocus()
-        pt = self.FigCanvas.figure.ginput(n=1)
-        self.Xpic_max = pt[0][0]
-
-        self.HintLabel.setText('Provide the maximum x value.')
-        self.Xreal_max, okPressed = QInputDialog.getDouble(self, "Set X_max value", "Value:", value=0, decimals=4)
-        self.HintLabel.setText('')
-        self.XmaxLabel.setText(str(self.Xreal_max))
-
-    def pickYmax(self):
-
-        self.HintLabel.setText('Click at a point having maximum y value.')
-        self.FigCanvas.setFocusPolicy( Qt.ClickFocus )
-        self.FigCanvas.setFocus()
-        pt = self.FigCanvas.figure.ginput(n=1)
-        self.Ypic_max = pt[0][1]
-
-        self.HintLabel.setText('Provide the maximum y value.')
-        self.Yreal_max, okPressed = QInputDialog.getDouble(self, "Set Y_max value", "Value:", value=0, decimals=4)
-        self.HintLabel.setText('')
-        self.YmaxLabel.setText(str(self.Yreal_max))
+    def select_Y1(self):
+        pic, real = self._select('y')
+        self.Ypic_max = pic
+        self.Yreal_max = real
+        self.Y1Label.setText(str(self.Yreal_max))
 
     def setXScaleType(self):
         if self.Xlinear.isChecked():

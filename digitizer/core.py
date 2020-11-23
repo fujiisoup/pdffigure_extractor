@@ -12,12 +12,17 @@ except ImportError:
 def _to_svg(pdf, page, figure_num=0):
     with fitz.open(pdf) as doc:
         return list(doc.pages())[page].getSVGimage(
-            text_as_path=True
+            text_as_path=False
         )
 
 
 def _compute_abs_path(path):
-    txts = path.getAttribute('d').strip().split(' ')
+    d = path.getAttribute('d')
+    if 'C' in d:
+        # curve is not implemented
+        return np.array([[np.nan, np.nan]])
+
+    txts = d.strip().split(' ')
 
     mode = 'M'
     paths = []
@@ -91,6 +96,12 @@ class Path:
                 self.abs_path[i], self.abs_path[i+1], point) 
             for i in range(len(self.abs_path) - 1)]
         return np.min(distances)
+
+    @property
+    def center(self):
+        return 0.5 * (
+            np.nanmax(self.abs_path, axis=0) + np.nanmin(self.abs_path)
+        )
 
 
 class Paths:
