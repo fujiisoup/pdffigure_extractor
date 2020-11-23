@@ -9,6 +9,10 @@ except ImportError:
     import geometry
 
 
+def n_pages(pdf):
+    with fitz.open(pdf) as doc:
+        return len(list(doc.pages()))
+    
 def _to_svg(pdf, page, figure_num=0):
     with fitz.open(pdf) as doc:
         return list(doc.pages())[page].getSVGimage(
@@ -105,6 +109,8 @@ class Path:
     
     @property
     def size2(self):
+        if len(self.abs_path) == 0:
+            return 0
         dx = np.nanmax(self.abs_path, axis=0) - np.nanmin(self.abs_path)
         return dx @ dx
 
@@ -147,6 +153,8 @@ class Paths:
         """
         point = self._from_inch(np.array(point))
         distances = [path.distance2(point) for path in self.paths]
+        if len(distances) == 0:
+            return None
         i = np.nanargmin(distances)
         return self.paths[i]
 

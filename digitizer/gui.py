@@ -5,7 +5,7 @@ import time
 import numpy as np
 # modules
 from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QGridLayout,
+    QApplication, QMainWindow, QWidget, QGridLayout, QSpinBox,
     QGroupBox, QPushButton, QFileDialog, QSizePolicy,
     QRadioButton, QInputDialog, QLabel, QDesktopWidget, QScrollArea,
     QGraphicsView, QGraphicsScene, QGraphicsItem, QGraphicsRectItem, QVBoxLayout)
@@ -68,7 +68,6 @@ class SvgView(QWebEngineView):
         pos = (scroll + pos - view_x) / zoomscale
         # convert it to inch
         dpi = ([self.physicalDpiX(), self.physicalDpiY()])
-        print(view_x, pos / dpi)
         return pos / dpi
 
     def onPress(self, event):
@@ -90,7 +89,7 @@ class SvgView(QWebEngineView):
             self.setHtml(new_svd)
 
     def selected(self, use_group=False):
-        if self._selected_path is None:
+        if self._selected_path is None or len(self._selected_path.abs_path) == 0:
             return None
         if use_group:
             raise NotImplementedError
@@ -109,8 +108,8 @@ class Windows(QMainWindow):
         self.title = "PyDigitizer"
         self.top = 100
         self.left = 100
-        self.width = sizeObject.width() * 0.6
-        self.height = self.width * screenRatio
+        self.width = int(sizeObject.width() * 0.6)
+        self.height = int(self.width * screenRatio)
         #
         self.CentralWidget = self.InitWindow()
         #
@@ -131,6 +130,7 @@ class MainWidget(QWidget):
 
     def __init__(self, parent):
         super().__init__()
+        self.filename = None
         # input
         self.X0pic = None
         self.X1pic = None
@@ -152,7 +152,8 @@ class MainWidget(QWidget):
         self.x = None
         self.y = None
 
-        (self.Xlinear,
+        (self.Page, 
+        self.Xlinear,
         self.Xlog,
         self.Ylinear,
         self.Ylog,
@@ -175,8 +176,13 @@ class MainWidget(QWidget):
         #
         LoadFileButton = QPushButton('Load Image',self)
         LoadFileButton.clicked.connect(self.loadImage)
+        LoadPageButton = QSpinBox()
+        LoadPageButton.valueChanged.connect(self.reloadImage)
+        LoadPageButton.setMaximum(0)
+        LoadPageButton.setMinimum(0)
         #
         LayoutSx1.addWidget(LoadFileButton,0,0)
+        LayoutSx1.addWidget(LoadPageButton,1,0)
         VBoxSx1.setLayout(LayoutSx1)
         # ----------------------------------
         VBoxSx2 = QGroupBox()
@@ -306,13 +312,27 @@ class MainWidget(QWidget):
         self.setLayout(windowLayout)
         # ----------------------------------
         # ----------------------------------
-        return (Xlinear, Xlolg, Ylinear, Ylog, WebView, HintLabel,
+        return (LoadPageButton, 
+                Xlinear, Xlolg, Ylinear, Ylog, WebView, HintLabel,
                 X0Label, Y0Label, X1Label, Y1Label)
 
     def loadImage(self):
-        filename, _ = QFileDialog.getOpenFileName()
-        txt = core._to_svg(filename, 0)
-        self.WebView.loadSvg(txt)
+        self.filename, _ = QFileDialog.getOpenFileName()
+        self.reloadImage()
+
+    def reloadImage(self):
+        if self.filename is None:
+            return
+        page = self.Page.value()
+        try:
+            n_page = core.n_pages(self.filename) - 1
+            page = np.minimum(page, n_page)
+            txt = core._to_svg(self.filename, page)
+            self.WebView.loadSvg(txt)
+            self.Page.setMaximum(n_page)
+        except RuntimeError:
+            # Not a valid file
+            self.HintLabel.setText('invalid file')        
 
     def eventFilter(self, source, event):
         if (event.type() == QEvent.ChildAdded and
